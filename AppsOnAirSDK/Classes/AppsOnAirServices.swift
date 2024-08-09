@@ -40,9 +40,6 @@ public class AppsOnAirServices {
     /// set description hint text
     var txtDescriptionHintText: String?
     
-    /// set email hint text
-    var txtEmailHintText: String?
-    
     /// set btnSubmit text
     var btnSubmitText: String?
     
@@ -52,6 +49,8 @@ public class AppsOnAirServices {
     /// set btnSubmit background color
     var btnSubmitBackgroundColor: String?
     
+    /// set Additional params while init
+    var additionalParams: [String:String]?
     
     public func setAppId(_ appId: String) -> (Void) {
         self.appId = appId;
@@ -59,7 +58,7 @@ public class AppsOnAirServices {
     }
     
     /// setup feedback screen 
-    public func setupFeedbackScreen(backgroundColor: String? = nil, navBarColor: String? = nil,navBarTitle: String? = nil, navBarTitleTextColor: String? = nil,  labelTextColor: String? = nil, inputHintTextColor: String? = nil, descriptionCharLimit: Int? = nil,txtEmailHintText: String? = nil,txtDescriptionHintText: String? = nil,  btnSubmitText: String? = nil, btnSubmitTextColor: String? = nil, btnSubmitBackgroundColor: String? = nil) {
+    public func setupFeedbackScreen(backgroundColor: String? = nil, navBarColor: String? = nil,navBarTitle: String? = nil, navBarTitleTextColor: String? = nil,  labelTextColor: String? = nil, inputHintTextColor: String? = nil, descriptionCharLimit: Int? = nil,txtDescriptionHintText: String? = nil,  btnSubmitText: String? = nil, btnSubmitTextColor: String? = nil, btnSubmitBackgroundColor: String? = nil, additionalParams:[String:String]? = nil) {
     
         self.navBarColor = navBarColor
         self.navBarTitle = navBarTitle
@@ -74,16 +73,23 @@ public class AppsOnAirServices {
         
         self.txtDescriptionHintText = txtDescriptionHintText
         
-        self.txtEmailHintText = txtEmailHintText
-        
         self.btnSubmitText = btnSubmitText
         self.btnSubmitTextColor = btnSubmitTextColor
         self.btnSubmitBackgroundColor = btnSubmitBackgroundColor
+        
+        self.additionalParams = additionalParams
         
         _ = UIViewController.classInit
         IQKeyboardManager.shared.enable = true
         
         
+    }
+    
+    
+    public func openFeedbackScreen() {
+        if let topViewController = UIApplication.topViewController(){
+            topViewController.showFeedbackScreen()
+        }
     }
     
 }

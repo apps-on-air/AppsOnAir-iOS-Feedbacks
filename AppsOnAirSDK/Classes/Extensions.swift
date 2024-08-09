@@ -10,10 +10,13 @@ import UIKit
 import CoreMotion
 import Toast_Swift
 import ZLImageEditor
+import AVKit
+import Photos
 
 // MARK: - EXTENSION UIViewController
 typealias ToastCompletionHandler = (_ success:Bool) -> Void
 var isFeedbackInProgress = false
+
 extension UIViewController {
     
     static let classInit: Void = {
@@ -25,18 +28,52 @@ extension UIViewController {
             return
         }
         
+        let originalSelectorViewDidDisappear = #selector(UIViewController.viewDidDisappear(_:))
+        let swizzledSelectorViewDidDisappear = #selector(UIViewController.swizzled_viewDidDisappear(_:))
         method_exchangeImplementations(originalMethod, swizzledMethod)
+        
+        guard let originalMethod = class_getInstanceMethod(UIViewController.self, originalSelectorViewDidDisappear),
+              let swizzledMethod = class_getInstanceMethod(UIViewController.self, swizzledSelectorViewDidDisappear) else {
+            return
+        }
+        method_exchangeImplementations(originalMethod, swizzledMethod)
+        
     }()
     
     @objc func swizzled_viewDidLoad() {
         self.swizzled_viewDidLoad()
-        setupMotionDetection()
+        
+        
+        if let name = NSStringFromClass(type(of: self)).components(separatedBy: ".").last {
+         print("View controller viewDidLoad: \(name)")
+            // Check the name and perform actions accordingly
+            if(name == "ZLEditImageViewController" || name == "FeedbackController" || name == "_UIImagePickerPlaceholderViewController" || name ==
+            "PUPhotoPickerHostViewController" || name == "UIImagePickerController") {
+             isFeedbackInProgress = true
+             return
+            } else {
+                setupMotionDetection()
+            }
+        }
+    
     }
+    
+    @objc private func swizzled_viewDidDisappear(_ animated: Bool) {
+        self.swizzled_viewDidDisappear(animated)
+               if let name = NSStringFromClass(type(of: self)).components(separatedBy: ".").last {
+                print("View controller disappeared: \(name) & isBeingDismissed: \(isBeingDismissed)")
+                    // Check the name and perform actions accordingly
+                
+                   if((name == "ZLEditImageViewController" || name == "FeedbackController") && isBeingDismissed) {
+                       isFeedbackInProgress = false
+                   }
+               }
+       }
     
     @objc func swizzled_dealloc() {
            // Clean up resources here if needed
            self.swizzled_dealloc()
-       }
+    }
     
     func setupMotionDetection() {
         // Set the view controller to become the first responder
@@ -51,69 +88,40 @@ extension UIViewController {
     
     open override func motionEnded(_ motion: UIEvent.EventSubtype, with event: UIEvent?) {
        
-            var screenshot: UIImage?
-            
             if motion == .motionShake {
                 print("Shake Gesture Detected")
-                guard !isFeedbackInProgress else {
-                    return
-                }
-                
-                isFeedbackInProgress = true
-                
-                if let captureImage = UIApplication.shared.windows.first?.takeScreenshot() {
-                    // Do something with the screenshot, like saving it to the photo library
-                    // UIImageWriteToSavedPhotosAlbum(screenshot, nil, nil, nil)
-                    screenshot = captureImage
-                }
-                
-                
-               ZLImageEditorConfiguration.default()
-                    .editImageTools([.draw, .clip, .textSticker])
-                    .adjustTools([.brightness, .contrast, .saturation])
-                
-                ZLEditImageViewController.showEditImageVC(parentVC: self, image: screenshot ?? UIImage()) { image, Editmodel in
-                    screenshot = image
-                    
-                    // let bundle = Bundle(for: type(of: self))
-                    let bundle = Bundle(identifier: "org.cocoapods.AppsOnAir")
-                    let storyboard = UIStoryboard(name: "Feedback", bundle: bundle)
-                    let Vc = storyboard.instantiateViewController(withIdentifier: "FeedbackController") as? FeedbackController
-                    
-                    Vc?.selectedImage = [screenshot ?? UIImage()]
-                    
-                    Vc?.navBarColor = AppsOnAirServices.shared.navBarColor
-                    Vc?.navBarTitle = AppsOnAirServices.shared.navBarTitle
-                    Vc?.navBarTitleTextColor = AppsOnAirServices.shared.navBarTitleTextColor
-                    
-                    Vc?.backgroundColor = AppsOnAirServices.shared.backgroundColor
-                    
-                    Vc?.labelTextColor = AppsOnAirServices.shared.labelTextColor
-                    Vc?.inputHintTextColor = AppsOnAirServices.shared.inputHintTextColor
-                    Vc?.backgroundColor = AppsOnAirServices.shared.backgroundColor
-                    
-                    Vc?.labelTextColor = AppsOnAirServices.shared.labelTextColor
-                    Vc?.inputHintTextColor = AppsOnAirServices.shared.inputHintTextColor
-                    
-                    
-                    Vc?.txtDescriptionCharLimit = AppsOnAirServices.shared.txtDescriptionCharLimit ?? 255
-                    Vc?.txtDescriptionHintText = AppsOnAirServices.shared.txtDescriptionHintText
-                    
-                    Vc?.txtEmailHintText = AppsOnAirServices.shared.txtEmailHintText
-                    
-                    Vc?.btnSubmitText = AppsOnAirServices.shared.btnSubmitText
-                    Vc?.btnSubmitTextColor = AppsOnAirServices.shared.btnSubmitTextColor
-                    Vc?.btnSubmitBackgroundColor = AppsOnAirServices.shared.btnSubmitBackgroundColor
-                    
-                    
-                    self.presentScreenFromTop(Vc ?? UIViewController())
-                    isFeedbackInProgress = false
-                }
-                
-                
+               handleShakeGesture()
             }
     }
     
+    func handleShakeGesture() {
+        var screenshot: UIImage?
+        
+        guard !isFeedbackInProgress else {
+            return
+        }
+        
+        
+        if let captureImage = UIApplication.shared.windows.first?.takeScreenshot() {
+            // Do something with the screenshot, like saving it to the photo library
+            // UIImageWriteToSavedPhotosAlbum(screenshot, nil, nil, nil)
+            screenshot = captureImage
+        }
+        
+       ZLImageEditorConfiguration.default()
+            .editImageTools([.draw, .clip, .textSticker])
+            .adjustTools([.brightness, .contrast, .saturation])
+        
+        ZLEditImageViewController.showEditImageVC(parentVC: self, image: screenshot ?? UIImage()) { image, Editmodel in
+            screenshot = image
+            
+            self.showFeedbackScreen(screenshot: screenshot)
+            
+        }
+        
+       
+    }
+   
     func presentScreenFromTop(_ viewController: UIViewController, animated: Bool = true, completion: (() -> Void)? = nil) {
         viewController.modalPresentationStyle = .overFullScreen // or .overCurrentContext
     
@@ -129,6 +137,135 @@ extension UIViewController {
             completion(true)
         })
         
+    }
+    
+    //IMAGE SELECTION  PRESENT CAMERA/PHOTO_LIBRARY
+    func selectImagePopup(_ title: String? = "Choose your Image source" , isAllFile: Bool = false){
+        
+        let alert = UIAlertController(title: nil, message: title , preferredStyle: UIAlertController.Style.actionSheet)
+        
+        /*
+             alert.addAction(UIAlertAction(title: "Camera", style: UIAlertAction.Style.default) { (result : UIAlertAction) -> Void in
+                self.openCamera()
+             })
+         */
+        
+        alert.addAction(UIAlertAction(title: "Gallery", style: UIAlertAction.Style.default) { (result : UIAlertAction) -> Void in
+            
+            self.openGalery(isAllFile: isAllFile)
+            
+        })
+        
+        alert.addAction(UIAlertAction(title: "Cancel", style: UIAlertAction.Style.cancel) { (result : UIAlertAction) -> Void in
+            
+            alert.dismiss(animated: true, completion: nil)
+            
+        })
+        
+        self.present(alert, animated: true, completion: nil)
+    }
+    
+    func openCamera() {
+        
+        print("==> Camera selected")
+        
+        if UIImagePickerController.isSourceTypeAvailable(.camera) {
+            
+            let status = AVCaptureDevice.authorizationStatus(for: AVMediaType.video)
+            
+            if (status == .authorized || status == .notDetermined) {
+                
+                let imagePicker = UIImagePickerController()
+                imagePicker.delegate = (self as! UIImagePickerControllerDelegate & UINavigationControllerDelegate)
+                imagePicker.sourceType = .camera;
+                imagePicker.allowsEditing = false
+                self.present(imagePicker, animated: true, completion: nil)
+                
+            }else if status == .denied {
+                
+                let alert = UIAlertController(title: "Feedback" , message: "Camera permission required", preferredStyle: UIAlertController.Style.alert);
+                
+                alert.addAction(UIAlertAction(title: "Ok", style: .default, handler: {(self) in
+                    
+                }))
+                
+                self.present(alert, animated: true, completion: nil)
+            }
+            
+        }else{
+            
+            print("Camera not Avalilable on this device")
+            
+            /*self.view.makeToast("Camera not Avalilable on this device", duration: 0.4, position: .bottom)*/
+        }
+    }
+    
+    func openGalery(isAllFile: Bool = false){
+        print("==> Gallery selected")
+        
+        PHPhotoLibrary.requestAuthorization { status in
+            if status == .denied {
+                let alert = UIAlertController(title: "Feedback" , message: "Gallery permission required", preferredStyle: UIAlertController.Style.alert);
+                
+                alert.addAction(UIAlertAction(title: "Ok", style: .default, handler: {(self) in
+                    
+                }))
+                
+                self.present(alert, animated: true, completion: nil)
+            } else {
+                if UIImagePickerController.isSourceTypeAvailable(.photoLibrary) {
+                    DispatchQueue.main.async {
+                        let imagePicker = UIImagePickerController()
+                        imagePicker.delegate = (self as? UIImagePickerControllerDelegate & UINavigationControllerDelegate)
+                        imagePicker.sourceType = .photoLibrary
+                        if isAllFile {
+                            imagePicker.mediaTypes = ["public.image", "public.movie"]
+                        }
+                        
+                        imagePicker.allowsEditing = false
+                        imagePicker.modalPresentationStyle = .fullScreen
+                        self.present(imagePicker, animated: true, completion: nil)
+                    }
+                    
+                    
+                }
+            }
+        }
+       
+    }
+    
+    public func showFeedbackScreen(screenshot: UIImage? = nil) {
+        //let bundle = Bundle(for: type(of: self))
+        let bundle = Bundle(identifier: "org.cocoapods.AppsOnAir")
+        let storyboard = UIStoryboard(name: "Feedback", bundle: bundle)
+        let Vc = storyboard.instantiateViewController(withIdentifier: "FeedbackController") as? FeedbackController
+        
+        if(screenshot != nil) {
+            Vc?.selectedImage = [screenshot ?? UIImage()]
+        }
+        
+        Vc?.navBarColor = AppsOnAirServices.shared.navBarColor
+        Vc?.navBarTitle = AppsOnAirServices.shared.navBarTitle
+        Vc?.navBarTitleTextColor = AppsOnAirServices.shared.navBarTitleTextColor
+        
+        Vc?.backgroundColor = AppsOnAirServices.shared.backgroundColor
+        
+        Vc?.labelTextColor = AppsOnAirServices.shared.labelTextColor
+        Vc?.inputHintTextColor = AppsOnAirServices.shared.inputHintTextColor
+        Vc?.backgroundColor = AppsOnAirServices.shared.backgroundColor
+        
+        Vc?.labelTextColor = AppsOnAirServices.shared.labelTextColor
+        Vc?.inputHintTextColor = AppsOnAirServices.shared.inputHintTextColor
+        
+        
+        Vc?.txtDescriptionCharLimit = AppsOnAirServices.shared.txtDescriptionCharLimit ?? 255
+        Vc?.txtDescriptionHintText = AppsOnAirServices.shared.txtDescriptionHintText
+        
+        Vc?.btnSubmitText = AppsOnAirServices.shared.btnSubmitText
+        Vc?.btnSubmitTextColor = AppsOnAirServices.shared.btnSubmitTextColor
+        Vc?.btnSubmitBackgroundColor = AppsOnAirServices.shared.btnSubmitBackgroundColor
+        
+        self.presentScreenFromTop(Vc ?? UIViewController())
     }
 }
 
@@ -189,7 +326,7 @@ extension UIView {
         
     }
     
-    func addCorrnerRaduis(color: UIColor = UIColor.lightGray, raduis: CGFloat?)  {
+    func addCornerRadius(color: UIColor = UIColor.lightGray, raduis: CGFloat?)  {
         self.layer.cornerRadius = raduis ?? 8.0
         self.layer.borderWidth = 1
         self.layer.masksToBounds = true 
@@ -197,7 +334,7 @@ extension UIView {
     }
     
     /*===================================================
-     * function Purpose: ROUND CORRNERS ON SPECIFIC SIDES
+     * function Purpose: ROUND CORNERS ON SPECIFIC SIDES
      ===================================================*/
     ///set round corrners on specific side
     func roundCorners(_ corners: UIRectCorner, radius: CGFloat) {
@@ -209,4 +346,46 @@ extension UIView {
         
     }
 
+}
+
+// MARK: - EXTENSION UIDevice
+extension UIDevice {
+    
+        var modelIdentifier: String {
+            #if targetEnvironment(simulator)
+            if let simDeviceName = ProcessInfo.processInfo.environment["SIMULATOR_MODEL_IDENTIFIER"] {
+                return "Simulator (\(simDeviceName))"
+            } else {
+                return "Simulator"
+            }
+            #else
+            var systemInfo = utsname()
+            uname(&systemInfo)
+            let machineMirror = Mirror(reflecting: systemInfo.machine)
+            let identifier = machineMirror.children.reduce("") { identifier, element in
+                guard let value = element.value as? Int8, value != 0 else { return identifier }
+                return identifier + String(UnicodeScalar(UInt8(value)))
+            }
+            return identifier
+            #endif
+        }
+    
+}
+
+// MARK: - EXTENSION UIApplication
+extension UIApplication {
+    class func topViewController(base: UIViewController? = UIApplication.shared.keyWindow?.rootViewController) -> UIViewController? {
+        if let nav = base as? UINavigationController {
+            return topViewController(base: nav.visibleViewController)
+        }
+        if let tab = base as? UITabBarController {
+            if let selected = tab.selectedViewController {
+                return topViewController(base: selected)
+            }
+        }
+        if let presented = base?.presentedViewController {
+            return topViewController(base: presented)
+        }
+        return base
+    }
 }

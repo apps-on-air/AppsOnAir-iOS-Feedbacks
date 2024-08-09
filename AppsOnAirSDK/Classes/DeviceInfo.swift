@@ -17,6 +17,10 @@ class MyDevice {
         // Device Model
         // let deviceModel = "\(UIDevice.current.model) \(UIDevice.current.name)"
         let deviceModel = "\(UIDevice.current.name)"
+        
+        let device = UIDevice()
+        let modelIdentifier = device.modelIdentifier
+        print("---> Model Identifier: \(modelIdentifier)")
            
         deviceInfo["deviceModel"] = "\(deviceModel)"
         
@@ -24,8 +28,10 @@ class MyDevice {
         deviceInfo["deviceOsVersion"] = UIDevice.current.systemVersion
             
         // Battery Level
-        deviceInfo["deviceBatteryLevel"] = UIDevice.current.batteryLevel
-        
+        let batteryLevel = UIDevice.current.batteryLevel
+        deviceInfo["deviceBatteryLevel"] =  batteryLevel <= 0 ?  "\(batteryLevel)%" : "\(Int(batteryLevel * 100))%"
+           
+           
         // Device Memory
         deviceInfo["deviceMemory"] =  "\(Double(ProcessInfo.processInfo.physicalMemory) / pow(1024, 3)) GB"
         
@@ -60,6 +66,17 @@ class MyDevice {
             
         // Timestamp
         deviceInfo["timestamp"] = Date()
+        
+        /// App Information
+        deviceInfo["appNme"] = Bundle.main.appName
+        
+        deviceInfo["bundleIdentifier"] = Bundle.main.bundleIdentifier
+        
+        deviceInfo["releaseVersionNumber"] = Bundle.main.releaseVersionNumber
+        
+        deviceInfo["buildVersionNumber"] = Bundle.main.buildVersionNumber
+        
+        deviceInfo["appsOnAirSDKVersion"] = Bundle(identifier: "org.cocoapods.AppsOnAir")?.buildVersionNumber
         
         return deviceInfo
     }
